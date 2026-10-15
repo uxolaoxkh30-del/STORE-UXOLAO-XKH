@@ -18,14 +18,16 @@ import {
 
 interface StockInViewProps {
   initialProductId?: string;
+  initialSupplierName?: string;
   onSelectVoucher: (movement: StockMovement) => void;
 }
 
 export const StockInView: React.FC<StockInViewProps> = ({
   initialProductId,
+  initialSupplierName,
   onSelectVoucher,
 }) => {
-  const { products, movements, recordStockIn } = useInventory();
+  const { products, movements, suppliers, recordStockIn } = useInventory();
 
   // Find initial product or fallback to first product
   const defaultProduct = initialProductId
@@ -36,7 +38,9 @@ export const StockInView: React.FC<StockInViewProps> = ({
   const [productSearch, setProductSearch] = useState('');
   const [quantity, setQuantity] = useState<number>(10);
   const [unitCost, setUnitCost] = useState<number>(defaultProduct?.costPrice || 0);
-  const [supplier, setSupplier] = useState<string>(defaultProduct?.supplier || 'ບໍລິສັດ ເບຍລາວ ຈຳກັດ');
+  const [supplier, setSupplier] = useState<string>(
+    initialSupplierName || defaultProduct?.supplier || (suppliers[0]?.name || 'ບໍລິສັດ ເບຍລາວ ຈຳກັດ')
+  );
   const [staffName, setStaffName] = useState<string>('ສົມຊາຍ ແກ້ວມະນີ (ຫົວໜ້າສາງ)');
   const [reason, setReason] = useState<string>(STOCK_IN_REASONS[0]);
   const [customDocNo, setCustomDocNo] = useState<string>('');
@@ -66,6 +70,12 @@ export const StockInView: React.FC<StockInViewProps> = ({
       setSelectedProductId(initialProductId);
     }
   }, [initialProductId]);
+
+  useEffect(() => {
+    if (initialSupplierName) {
+      setSupplier(initialSupplierName);
+    }
+  }, [initialSupplierName]);
 
   // Filter products in dropdown
   const filteredProductOptions = products.filter(p =>
@@ -275,11 +285,19 @@ export const StockInView: React.FC<StockInViewProps> = ({
                 <input
                   type="text"
                   required
+                  list="registered-suppliers"
                   value={supplier}
                   onChange={e => setSupplier(e.target.value)}
                   placeholder="ເຊັ່ນ: ບໍລິສັດ ເບຍລາວ ຈຳກັດ"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
                 />
+                <datalist id="registered-suppliers">
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.name}>
+                      [{s.code}] {s.name} ({s.contactPerson})
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               <div>

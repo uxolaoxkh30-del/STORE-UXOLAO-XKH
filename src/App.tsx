@@ -13,6 +13,7 @@ import { StockAuditView } from './components/StockAuditView';
 import { VoucherModal } from './components/VoucherModal';
 import { BarcodeLabelsModal } from './components/BarcodeLabelsModal';
 import { SettingsModal } from './components/SettingsModal';
+import { SuppliersView } from './components/SuppliersView';
 import { StockMovement, Product } from './types/inventory';
 
 const MainLayout: React.FC = () => {
@@ -21,7 +22,9 @@ const MainLayout: React.FC = () => {
 
   // Cross-view actions
   const [activeStockInProductId, setActiveStockInProductId] = useState<string | undefined>(undefined);
+  const [activeStockInSupplierName, setActiveStockInSupplierName] = useState<string | undefined>(undefined);
   const [activeStockOutProductId, setActiveStockOutProductId] = useState<string | undefined>(undefined);
+  const [activeProductSupplierName, setActiveProductSupplierName] = useState<string | undefined>(undefined);
   const [isAddProductInitiallyOpen, setIsAddProductInitiallyOpen] = useState<boolean>(false);
 
   // Modals
@@ -32,8 +35,9 @@ const MainLayout: React.FC = () => {
 
   const { products, findProduct } = useInventory();
 
-  const handleOpenStockIn = (productId?: string) => {
+  const handleOpenStockIn = (productId?: string, supplierName?: string) => {
     setActiveStockInProductId(productId);
+    setActiveStockInSupplierName(supplierName);
     setCurrentTab('stock-in');
     setMobileMenuOpen(false);
   };
@@ -44,10 +48,15 @@ const MainLayout: React.FC = () => {
     setMobileMenuOpen(false);
   };
 
-  const handleOpenAddProduct = () => {
+  const handleOpenAddProduct = (supplierName?: string) => {
+    setActiveProductSupplierName(supplierName);
     setIsAddProductInitiallyOpen(true);
     setCurrentTab('products');
     setMobileMenuOpen(false);
+  };
+
+  const handleOpenAddProductForSupplier = (supplierName: string) => {
+    handleOpenAddProduct(supplierName);
   };
 
   const handleSelectVoucher = (movement: StockMovement) => {
@@ -101,12 +110,23 @@ const MainLayout: React.FC = () => {
               onOpenStockOut={handleOpenStockOut}
               onPrintBarcode={handleOpenBarcodeLabels}
               isAddModalOpenInitially={isAddProductInitiallyOpen}
+              initialSupplierName={activeProductSupplierName}
+              onNavigateToSuppliers={() => setCurrentTab('suppliers')}
+            />
+          )}
+
+          {currentTab === 'suppliers' && (
+            <SuppliersView
+              onOpenStockIn={(productId, supplierName) => handleOpenStockIn(productId, supplierName)}
+              onOpenAddProductForSupplier={handleOpenAddProductForSupplier}
+              onSelectVoucher={handleSelectVoucher}
             />
           )}
 
           {currentTab === 'stock-in' && (
             <StockInView
               initialProductId={activeStockInProductId}
+              initialSupplierName={activeStockInSupplierName}
               onSelectVoucher={handleSelectVoucher}
             />
           )}

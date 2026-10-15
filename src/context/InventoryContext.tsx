@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, StockMovement, WarehouseSettings } from '../types/inventory';
-import { INITIAL_PRODUCTS, INITIAL_MOVEMENTS } from '../data/mockData';
+import { Product, StockMovement, WarehouseSettings, Supplier } from '../types/inventory';
+import { INITIAL_PRODUCTS, INITIAL_MOVEMENTS, INITIAL_SUPPLIERS } from '../data/mockData';
 import { generateDocNumber } from '../utils/formatters';
 
 interface InventoryStats {
@@ -20,12 +20,17 @@ interface InventoryStats {
 interface InventoryContextType {
   products: Product[];
   movements: StockMovement[];
+  suppliers: Supplier[];
   stats: InventoryStats;
   settings: WarehouseSettings;
   updateSettings: (updates: Partial<WarehouseSettings>) => void;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Product;
   updateProduct: (id: string, updates: Partial<Product>) => void;
   deleteProduct: (id: string) => boolean;
+  addSupplier: (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>) => Supplier;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => boolean;
+  findSupplier: (idOrName: string) => Supplier | undefined;
   recordStockIn: (params: {
     productId: string;
     quantity: number;
@@ -72,6 +77,7 @@ interface InventoryContextType {
 
 const STORAGE_KEY_PRODUCTS = 'lao_warehouse_products_v1';
 const STORAGE_KEY_MOVEMENTS = 'lao_warehouse_movements_v1';
+const STORAGE_KEY_SUPPLIERS = 'lao_warehouse_suppliers_v1';
 const STORAGE_KEY_SETTINGS = 'lao_warehouse_settings_v1';
 
 export const DEFAULT_SETTINGS: WarehouseSettings = {
@@ -124,6 +130,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return INITIAL_MOVEMENTS;
   });
 
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SUPPLIERS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Error loading suppliers from storage', e);
+    }
+    return INITIAL_SUPPLIERS;
+  });
+
   // Save to localStorage on change
   useEffect(() => {
     try {
@@ -148,6 +167,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.error('Error saving movements', e);
     }
   }, [movements]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SUPPLIERS, JSON.stringify(suppliers));
+    } catch (e) {
+      console.error('Error saving suppliers', e);
+    }
+  }, [suppliers]);
 
   // Compute live statistics
   const stats: InventoryStats = React.useMemo(() => {
@@ -270,6 +297,48 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const deleteProduct = (id: string): boolean => {
     setProducts(prev => prev.filter(p => p.id !== id));
     return true;
+  };
+
+  const addSupplier = (supplierData: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>): Supplier => {
+    const nextNum = suppliers.length + 1;
+    const code = supplierData.code?.trim() || `SUP-${String(nextNum).padStart(3, '0')}`;
+    const newSup: Supplier = {
+      ...supplierData,
+      id: `sup-${Date.now()}`,
+      code,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setSuppliers(prev => [newSup, ...prev]);
+    return newSup;
+  };
+
+  const updateSupplier = (id: string, updates: Partial<Supplier>) => {
+    setSuppliers(prev =>
+      prev.map(s => {
+        if (s.id === id) {
+          return {
+            ...s,
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return s;
+      })
+    );
+  };
+
+  const deleteSupplier = (id: string): boolean => {
+    setSuppliers(prev => prev.filter(s => s.id !== id));
+    return true;
+  };
+
+  const findSupplier = (idOrName: string): Supplier | undefined => {
+    if (!idOrName) return undefined;
+    const lower = idOrName.toLowerCase().trim();
+    return suppliers.find(
+      s => s.id === idOrName || s.code.toLowerCase() === lower || s.name.toLowerCase() === lower
+    );
   };
 
   const recordStockIn = ({
@@ -579,6 +648,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       settings,
       products,
       movements,
+      suppliers,
     };
     const jsonStr = JSON.stringify(backupData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -600,6 +670,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       setProducts(parsed.products);
       setMovements(parsed.movements);
+      if (Array.isArray(parsed.suppliers)) {
+        setSuppliers(parsed.suppliers);
+      }
       if (parsed.settings) {
         setSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
       }
@@ -612,17 +685,21 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const resetToDemoData = () => {
     setProducts(INITIAL_PRODUCTS);
     setMovements(INITIAL_MOVEMENTS);
+    setSuppliers(INITIAL_SUPPLIERS);
     setSettings(DEFAULT_SETTINGS);
     localStorage.removeItem(STORAGE_KEY_PRODUCTS);
     localStorage.removeItem(STORAGE_KEY_MOVEMENTS);
+    localStorage.removeItem(STORAGE_KEY_SUPPLIERS);
     localStorage.removeItem(STORAGE_KEY_SETTINGS);
   };
 
   const clearAllData = () => {
     setProducts([]);
     setMovements([]);
+    setSuppliers([]);
     localStorage.removeItem(STORAGE_KEY_PRODUCTS);
     localStorage.removeItem(STORAGE_KEY_MOVEMENTS);
+    localStorage.removeItem(STORAGE_KEY_SUPPLIERS);
   };
 
   return (
@@ -630,12 +707,17 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       value={{
         products,
         movements,
+        suppliers,
         stats,
         settings,
         updateSettings,
         addProduct,
         updateProduct,
         deleteProduct,
+        addSupplier,
+        updateSupplier,
+        deleteSupplier,
+        findSupplier,
         recordStockIn,
         recordStockOut,
         adjustStock,

@@ -163,3 +163,30 @@ export interface WarehouseSettings {
   thbRate: number; // e.g. 620 LAK per 1 THB
   usdRate: number; // e.g. 22000 LAK per 1 USD
 }
+
+export interface Supplier {
+  id: string;
+  code: string; // e.g. SUP-001
+  name: string; // ຊື່ບໍລິສັດ/ຜູ້ສະໜອງ
+  contactPerson: string; // ຜູ້ຕິດຕໍ່ປະສານງານ
+  phone: string; // ເບີໂທລະສັບ
+  email?: string; // ອີເມລ
+  address: string; // ທີ່ຢູ່
+  category?: string; // ໝວດໝູ່ສິນຄ້າຫຼັກ
+  taxId?: string; // ເລກປະຈຳຕົວຜູ້ເສຍພາສີ
+  paymentTerms?: string; // ເງື່ອນໄຂການຊຳລະ (ເງິນສົດ, ເຄຣດິດ 30 ວັນ, etc.)
+  status: 'ACTIVE' | 'INACTIVE';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const SUPPLIER_PAYMENT_TERMS = [
+  'ເງິນສົດ (Cash On Delivery)',
+  'ໂອນຜ່ານທະນາຄານ (Bank Transfer)',
+  'ເຄຣດິດ 15 ວັນ (Credit 15 Days)',
+  'ເຄຣດິດ 30 ວັນ (Credit 30 Days)',
+  'ເຄຣດິດ 60 ວັນ (Credit 60 Days)',
+  'ມັດຈຳ 50% / ຊຳລະເມື່ອສົ່ງມອບ 50%',
+] as const;
+

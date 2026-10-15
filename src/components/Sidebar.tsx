@@ -9,7 +9,8 @@ import {
   BarChart3, 
   AlertCircle,
   FileSpreadsheet,
-  Boxes
+  Boxes,
+  Building2
 } from 'lucide-react';
 import { formatNumber } from '../utils/formatters';
 
@@ -26,7 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileMenuOpen,
   setMobileMenuOpen,
 }) => {
-  const { stats } = useInventory();
+  const { stats, suppliers } = useInventory();
 
   const navItems = [
     {
@@ -41,6 +42,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       sublabel: 'Product Management',
       icon: Package,
       badge: stats.totalSkus,
+    },
+    {
+      id: 'suppliers',
+      label: 'ຜູ້ສະໜອງສິນຄ້າ',
+      sublabel: 'Supplier Management',
+      icon: Building2,
+      badge: suppliers.length,
+      color: 'text-indigo-400',
     },
     {
       id: 'stock-in',

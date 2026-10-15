@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { Product, PRODUCT_CATEGORIES, PRODUCT_UNITS } from '../types/inventory';
+import { Product, PRODUCT_CATEGORIES, PRODUCT_UNITS, SUPPLIER_PAYMENT_TERMS } from '../types/inventory';
 import { formatKip, formatNumber, exportToCSV } from '../utils/formatters';
 import { CameraCaptureModal } from './CameraCaptureModal';
 import { 
@@ -25,7 +25,11 @@ import {
   Upload,
   Image as ImageIcon,
   ZoomIn,
-  Barcode
+  Barcode,
+  Building2,
+  Phone,
+  User,
+  ExternalLink
 } from 'lucide-react';
 
 interface ProductManagementViewProps {
@@ -33,6 +37,8 @@ interface ProductManagementViewProps {
   onOpenStockOut: (productId?: string) => void;
   onPrintBarcode?: (product?: Product) => void;
   isAddModalOpenInitially?: boolean;
+  initialSupplierName?: string;
+  onNavigateToSuppliers?: () => void;
 }
 
 export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
@@ -40,19 +46,35 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
   onOpenStockOut,
   onPrintBarcode,
   isAddModalOpenInitially = false,
+  initialSupplierName,
+  onNavigateToSuppliers,
 }) => {
-  const { products, addProduct, updateProduct, deleteProduct, adjustStock } = useInventory();
+  const { products, addProduct, updateProduct, deleteProduct, adjustStock, suppliers, addSupplier } = useInventory();
 
   // Search & Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [stockStatusFilter, setStockStatusFilter] = useState<'ALL' | 'NORMAL' | 'LOW' | 'OUT'>('ALL');
+  const [selectedSupplierFilter, setSelectedSupplierFilter] = useState<string>('ALL');
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(isAddModalOpenInitially);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+
+  // Quick Add Supplier inline modal state
+  const [isQuickAddSupplierOpen, setIsQuickAddSupplierOpen] = useState(false);
+  const [quickSupplierData, setQuickSupplierData] = useState({
+    code: '',
+    name: '',
+    contactPerson: '',
+    phone: '',
+    address: '',
+    category: PRODUCT_CATEGORIES[0] as string,
+    paymentTerms: SUPPLIER_PAYMENT_TERMS[0] as string,
+  });
+  const [quickSupplierError, setQuickSupplierError] = useState<string | null>(null);
 
   // Camera & Image preview states
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
@@ -113,9 +135,50 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
         matchesStatus = p.quantity > p.minStockAlert;
       }
 
-      return matchesSearch && matchesCategory && matchesStatus;
+      // Supplier filter
+      const matchesSupplier =
+        selectedSupplierFilter === 'ALL' ||
+        (p.supplier && p.supplier.toLowerCase().trim() === selectedSupplierFilter.toLowerCase().trim());
+
+      return matchesSearch && matchesCategory && matchesStatus && matchesSupplier;
     });
-  }, [products, searchTerm, selectedCategory, stockStatusFilter]);
+  }, [products, searchTerm, selectedCategory, stockStatusFilter, selectedSupplierFilter]);
+
+  // Find supplier detail if mapped
+  const selectedSupplierDetail = useMemo(() => {
+    if (!formData.supplier) return null;
+    const trimmed = formData.supplier.toLowerCase().trim();
+    return suppliers.find(s => s.name.toLowerCase().trim() === trimmed || s.code.toLowerCase().trim() === trimmed);
+  }, [formData.supplier, suppliers]);
+
+  // Sync initialSupplierName if provided
+  useEffect(() => {
+    if (initialSupplierName) {
+      setFormData(prev => ({ ...prev, supplier: initialSupplierName }));
+      setIsFormModalOpen(true);
+    }
+  }, [initialSupplierName]);
+
+  // Quick Add Supplier inline handler
+  const handleQuickAddSupplier = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickSupplierData.name.trim() || !quickSupplierData.phone.trim()) {
+      setQuickSupplierError('ກະລຸນາປ້ອນຊື່ຜູ້ສະໜອງ ແລະ ເບີໂທຕິດຕໍ່ໃຫ້ຄົບຖ້ວນ');
+      return;
+    }
+    const newSup = addSupplier({
+      code: quickSupplierData.code.trim() || `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
+      name: quickSupplierData.name.trim(),
+      contactPerson: quickSupplierData.contactPerson.trim() || 'ບໍ່ໄດ້ລະບຸ',
+      phone: quickSupplierData.phone.trim(),
+      address: quickSupplierData.address.trim() || 'ນະຄອນຫຼວງວຽງຈັນ',
+      category: quickSupplierData.category,
+      paymentTerms: quickSupplierData.paymentTerms,
+      status: 'ACTIVE',
+    });
+    setFormData(prev => ({ ...prev, supplier: newSup.name }));
+    setIsQuickAddSupplierOpen(false);
+  };
 
   // Open modal for Create
   const handleOpenAdd = () => {
@@ -133,7 +196,7 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
       quantity: 10,
       minStockAlert: 5,
       location: 'ໂຊນ A-01',
-      supplier: '',
+      supplier: initialSupplierName || '',
       notes: '',
       imageUrl: '',
     });
@@ -377,14 +440,14 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
 
         {/* Filter & Search Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-5">
-          {/* Search Input (5 Cols) */}
-          <div className="lg:col-span-5 relative">
+          {/* Search Input (4 Cols) */}
+          <div className="lg:col-span-4 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="ຄົ້ນຫາ: ຊື່ສິນຄ້າ, SKU, ບາໂຄ້ດ, ໂຊນຈັດເກັບ..."
+              placeholder="ຄົ້ນຫາ: ຊື່ສິນຄ້າ, SKU, ບາໂຄ້ດ, ໂຊນ..."
               className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm transition"
             />
             {searchTerm && (
@@ -397,8 +460,8 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
             )}
           </div>
 
-          {/* Category Dropdown (4 Cols) */}
-          <div className="lg:col-span-4">
+          {/* Category Dropdown (3 Cols) */}
+          <div className="lg:col-span-3">
             <select
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
@@ -413,17 +476,33 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
             </select>
           </div>
 
-          {/* Status Filter (3 Cols) */}
+          {/* Supplier Dropdown (3 Cols) */}
           <div className="lg:col-span-3">
+            <select
+              value={selectedSupplierFilter}
+              onChange={e => setSelectedSupplierFilter(e.target.value)}
+              className="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm bg-white cursor-pointer"
+            >
+              <option value="ALL">ຜູ້ສະໜອງທັງໝົດ (All Suppliers)</option>
+              {suppliers.map(s => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter (2 Cols) */}
+          <div className="lg:col-span-2">
             <select
               value={stockStatusFilter}
               onChange={e => setStockStatusFilter(e.target.value as any)}
               className="w-full py-2.5 px-3 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-sm bg-white cursor-pointer"
             >
-              <option value="ALL">ສະຖານະທັງໝົດ (All Status)</option>
-              <option value="NORMAL">ສະຕັອກປົກກະຕິ (Normal)</option>
-              <option value="LOW">ສິນຄ້າໃກ້ໝົດ (Low Stock)</option>
-              <option value="OUT">ໝົດສະຕັອກ (Out of Stock)</option>
+              <option value="ALL">ສະຖານະທັງໝົດ</option>
+              <option value="NORMAL">ສະຕັອກປົກກະຕິ</option>
+              <option value="LOW">ສິນຄ້າໃກ້ໝົດ</option>
+              <option value="OUT">ໝົດສະຕັອກ</option>
             </select>
           </div>
         </div>
@@ -544,6 +623,15 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                               {p.barcode && (
                                 <span className="font-mono text-[11px] text-slate-500">
                                   Barcode: {p.barcode}
+                                </span>
+                              )}
+                              {p.supplier && (
+                                <span 
+                                  className="inline-flex items-center gap-1 font-sans text-[11px] text-slate-600 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 px-1.5 py-0.5 rounded border border-slate-200 transition"
+                                  title={`ຜູ້ສະໜອງ: ${p.supplier}`}
+                                >
+                                  <Building2 className="w-3 h-3 text-slate-400" />
+                                  <span className="truncate max-w-[110px]">{p.supplier}</span>
                                 </span>
                               )}
                             </div>
@@ -964,18 +1052,100 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                   />
                 </div>
 
-                {/* Supplier */}
+                {/* Supplier Field with Integrated Selector and Quick Add */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ຜູ້ສະໜອງຫຼັກ (Supplier)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.supplier}
-                    onChange={e => setFormData({ ...formData, supplier: e.target.value })}
-                    placeholder="ເຊັ່ນ: ບໍລິສັດ ເບຍລາວ ຈຳກັດ"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      ຜູ້ສະໜອງຫຼັກ (Supplier)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickSupplierData({
+                          code: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
+                          name: '',
+                          contactPerson: '',
+                          phone: '',
+                          address: '',
+                          category: formData.category || PRODUCT_CATEGORIES[0],
+                          paymentTerms: SUPPLIER_PAYMENT_TERMS[0],
+                        });
+                        setQuickSupplierError(null);
+                        setIsQuickAddSupplierOpen(true);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ ເພີ່ມຜູ້ສະໜອງໃໝ່</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <select
+                      value={formData.supplier}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__ADD_NEW__') {
+                          setQuickSupplierData({
+                            code: `SUP-${String(suppliers.length + 1).padStart(3, '0')}`,
+                            name: '',
+                            contactPerson: '',
+                            phone: '',
+                            address: '',
+                            category: formData.category || PRODUCT_CATEGORIES[0],
+                            paymentTerms: SUPPLIER_PAYMENT_TERMS[0],
+                          });
+                          setQuickSupplierError(null);
+                          setIsQuickAddSupplierOpen(true);
+                        } else {
+                          setFormData({ ...formData, supplier: val });
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 cursor-pointer"
+                    >
+                      <option value="">-- ເລືອກຜູ້ສະໜອງ (ຫຼື ບໍ່ໄດ້ລະບຸ) --</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.name}>
+                          [{s.code}] {s.name} {s.contactPerson ? `(${s.contactPerson})` : ''}
+                        </option>
+                      ))}
+                      <option value="__ADD_NEW__" className="text-indigo-600 font-bold">
+                        + ເພີ່ມຜູ້ສະໜອງໃໝ່ເຂົ້າລະບົບ...
+                      </option>
+                    </select>
+
+                    {/* Integrated Supplier Contact Details Card */}
+                    {selectedSupplierDetail && (
+                      <div className="p-2.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs space-y-1 text-slate-700">
+                        <div className="flex items-center justify-between font-semibold text-indigo-900">
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span className="truncate">{selectedSupplierDetail.name}</span>
+                          </span>
+                          <span className="font-mono text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
+                            {selectedSupplierDetail.code}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-slate-600 pt-0.5">
+                          <div className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{selectedSupplierDetail.contactPerson}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                            <a href={`tel:${selectedSupplierDetail.phone}`} className="font-mono text-indigo-600 hover:underline truncate">
+                              {selectedSupplierDetail.phone}
+                            </a>
+                          </div>
+                        </div>
+                        {selectedSupplierDetail.paymentTerms && (
+                          <div className="text-[10px] text-slate-500 pt-0.5 border-t border-indigo-100 truncate">
+                            ເງື່ອນໄຂຊຳລະ: {selectedSupplierDetail.paymentTerms}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1224,6 +1394,156 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                 ປິດໜ້າຕ່າງ
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: Quick Add Supplier ===================== */}
+      {isQuickAddSupplierOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+            <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-base">
+                  ເພີ່ມຜູ້ສະໜອງໃໝ່ດ່ວນ (Quick Add Supplier)
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsQuickAddSupplierOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAddSupplier} className="p-5 space-y-3.5 text-xs">
+              {quickSupplierError && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-800 font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{quickSupplierError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ລະຫັດ (Code)
+                  </label>
+                  <input
+                    type="text"
+                    value={quickSupplierData.code}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, code: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ຊື່ບໍລິສັດ / ຜູ້ສະໜອງ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={quickSupplierData.name}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="ເຊັ່ນ: ບໍລິສັດ ຄ້າຂາອອກ-ຂາເຂົ້າ ລາວ"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ຜູ້ຕິດຕໍ່ປະສານງານ
+                  </label>
+                  <input
+                    type="text"
+                    value={quickSupplierData.contactPerson}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, contactPerson: e.target.value }))}
+                    placeholder="ເຊັ່ນ: ທ່ານ ສົມສັກ"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ເບີໂທລະສັບຕິດຕໍ່ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={quickSupplierData.phone}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, phone: e.target.value }))}
+                    placeholder="020 55512345"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ໝວດໝູ່ຫຼັກ
+                  </label>
+                  <select
+                    value={quickSupplierData.category}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white cursor-pointer"
+                  >
+                    {PRODUCT_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    ເງື່ອນໄຂການຊຳລະ
+                  </label>
+                  <select
+                    value={quickSupplierData.paymentTerms}
+                    onChange={e => setQuickSupplierData(prev => ({ ...prev, paymentTerms: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white cursor-pointer"
+                  >
+                    {SUPPLIER_PAYMENT_TERMS.map(term => (
+                      <option key={term} value={term}>
+                        {term}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  ທີ່ຢູ່ / ໂຮງງານ
+                </label>
+                <input
+                  type="text"
+                  value={quickSupplierData.address}
+                  onChange={e => setQuickSupplierData(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="ບ້ານ, ເມືອງ, ນະຄອນຫຼວງວຽງຈັນ..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAddSupplierOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
+                >
+                  ຍົກເລີກ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md shadow-indigo-600/20 cursor-pointer"
+                >
+                  ບັນທຶກ ແລະ ເລືອກທັນທີ
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
