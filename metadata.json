@@ -1,0 +1,6 @@
+{
+  "name": "ລະບົບຄຸ້ມຄອງສາງສິນຄ້າ (Lao Warehouse Management)",
+  "description": "ລະບົບຄຸ້ມຄອງສາງສິນຄ້າຄົບວົງຈອນ: Dashboard ພາບລວມ, ຈັດການສິນຄ້າ, ບັນທຶກຮັບເຂົ້າ-ເບີກອອກ, ກວດສອບສະຕັອກ, ແຈ້ງເຕືອນສິນຄ້າໃກ້ໝົດ ແລະ Export Excel/PDF",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
